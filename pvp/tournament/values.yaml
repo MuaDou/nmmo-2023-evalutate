@@ -1,0 +1,46 @@
+tournament: "final-top16"
+version: "test"
+
+mode: "tournament"
+# mode: "score"
+
+scheduleMatches:
+  env:
+    NMMO_MODE: "PVP"
+    AICROWD_GRADER_IDS: "4241"
+    AICROWD_API_TOKEN: "2bd1cc575998585bf42cec5c7f76f0f5"
+    NMMO_TOURNAMENT: "{{ .Values.tournament }}"
+    LOGURU_LEVEL: "INFO"
+    # 2022-11-01 23:59:59 Los_Angeles / 2022-11-02 14:59:59 Shanghai
+    # top16
+    NMMO_SPECIFIC_SUBMISSIONS: "205360,205308,205323,205343,203451,204709,205351,204437,205317,205379,200862,203443,205222,204419,199331,198822"
+
+runMatch:
+  rollout:
+    env:
+      NMMO_MODE: "PVP"
+      AICROWD_GRADER_IDS: "4241"
+      AICROWD_API_TOKEN: "2bd1cc575998585bf42cec5c7f76f0f5"
+      NMMO_TOURNAMENT: "{{ .Values.tournament }}"
+      LOGURU_LEVEL: "INFO"
+      AICROWD_SHARED_DIR: "/share"
+      NMMO_SUBMISSION_DIR: "/share/submissions"
+      NMMO_BASE_POLICY_STORE_DIR: "/share/policy_store"
+      CONTENDER_JSON_PATH": "/share/Contender.json"
+      TASK_FILE_PATH: "./eval_task_with_embedding.pkl"
+      DOWNLOAD_SUBMISSION_SCRIPT_PATH: "./setup.sh"
+
+aggregate:
+  env:
+    NMMO_MODE: "PVP_AGGREGATE"
+    AICROWD_GRADER_IDS: "4241"
+    AICROWD_API_TOKEN: "2bd1cc575998585bf42cec5c7f76f0f5"
+    NMMO_TOURNAMENT: "{{ .Values.tournament }}" 
+    LOGURU_LEVEL: "INFO"
+    NMMO_ROLLOUT_NAME: "TEST"
+    NMMO_LOCAL: "0"
+    NMMO_TOURNAMENT: "test"
+    NMMO_UPLOAD_REPLAY: "0"
+    NMMO_PVP_AGGREGATE_DRY_RUN: "0"
+    AICROWD_SHARED_DIR: "/share"
+    CONTENDER_JSON_PATH: "/share/Contender.json"

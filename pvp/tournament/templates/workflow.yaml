@@ -1,0 +1,156 @@
+{{- if eq .Values.mode "tournament" }}
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: pvp-{{ .Values.tournament }}-
+spec:
+  imagePullSecrets:
+  - name: qcloudregistrykey
+  - name: regcred
+  ttlStrategy:
+    secondsAfterCompletion: 1800
+    secondsAfterFailure: 1800
+    secondsAfterSuccess: 1800
+  #podGC:
+  #  strategy: OnWorkflowSuccess
+  activeDeadlineSeconds: 900
+  entrypoint: pvp
+  templates:
+  - name: pvp
+    steps:
+    - - name: schedule-matches
+        template: schedule-matches
+    - - name: run-match
+        template: run-match
+        arguments:
+          parameters:
+          - name: match
+            value: "{{`{{item}}`}}"
+        withParam: "{{`{{steps.schedule-matches.outputs.parameters.next-matches}}`}}"
+
+  - name: run-match
+    inputs:
+      parameters:
+      - name: match
+    dag:
+      tasks:
+      - name: rollout
+        template: rollout
+      - name: daemon
+        template: daemon
+        depends: rollout
+        arguments:
+          parameters:
+          - name: rollout-ip
+            value: "{{`{{tasks.rollout.ip}}`}}"
+
+  - name: schedule-matches
+    nodeSelector:
+      nmmo/main: "1"
+    container:
+      image: hkccr.ccs.tencentyun.com/neurips2022nmmo/evaluator:{{ .Values.version }}
+      imagePullPolicy: Always
+      command:
+      - bash
+      - -c
+      args:
+      - |2
+        export PYTHONPATH=${PYTHONPATH}:/home/aicrowd
+        python -u pvp/schedule_matches.py
+      env:
+      {{- range $key, $value := $.Values.scheduleMatches.env }}
+      - name: {{ $key }}
+        value: {{ tpl $value $ | quote }}
+      {{- end }}
+      volumeMounts:
+      - name: shared-disk
+        subPath: pvp/{{ .Values.tournament }}
+        mountPath: /shared
+    outputs:
+      parameters:
+      - name: next-matches
+        valueFrom:
+          path: /tmp/next-matches
+    volumes:
+    - name: shared-disk
+      nfs:
+        server: 192.168.224.15
+        path: /ru6a4tgh
+
+  - name: rollout
+    daemon: true
+    nodeSelector:
+      node-group: pvp
+    tolerations:
+    - key: node-group
+      value: pvp
+    container:
+      image: hkccr.ccs.tencentyun.com/neurips2022nmmo/evaluator:{{ .Values.version }}
+      imagePullPolicy: Always
+      resources:
+        requests:
+          cpu: 1
+          memory: 5Gi
+        limits:
+          cpu: 1
+          memory: 5Gi
+      command:
+      - bash
+      - -c
+      args:
+      - |2
+        nohup python -m http.server 12344 1>httpserver.log 2>&1 &
+        export PYTHONPATH=${PYTHONPATH}:/home/aicrowd
+        python -u pvp/rollout.py
+      env:
+      {{- range $key, $value := $.Values.runMatch.rollout.env }}
+      - name: {{ $key }}
+        value: {{ tpl $value $ | quote }}
+      {{- end }}
+      volumeMounts:
+      - name: shared-disk
+        subPath: pvp/{{ .Values.tournament }}
+        mountPath: /shared
+    volumes:
+    - name: shared-disk
+      nfs:
+        server: 192.168.224.15
+        path: /ru6a4tgh
+
+  - name: daemon
+    inputs:
+      parameters:
+      - name: rollout-ip
+    nodeSelector:
+      node-group: pvp
+    tolerations:
+    - key: node-group
+      value: pvp
+    container:
+      image: python:3.9.6
+      imagePullPolicy: IfNotPresent
+      command:
+      - bash
+      - -c
+      args:
+      - |2
+        errcnt=0
+        while true
+        do
+            curl {{`{{inputs.parameters.rollout-ip}}`}}:12344 -m 1 1>curl.log 2>&1
+            if [[ $? -ne 0 ]]; then
+                errcnt=$(( $errcnt + 1 ))
+                echo "curl failed. errcnt: ${errcnt}"
+                cat curl.log
+            else
+                errcnt=0
+            fi
+
+            if [[ $errcnt -ge 3 ]]; then
+                echo "bye"
+                break
+            fi
+
+            sleep 5
+        done
+{{- end }}

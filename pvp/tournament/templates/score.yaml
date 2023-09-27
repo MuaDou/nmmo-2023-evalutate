@@ -1,0 +1,47 @@
+{{- if eq .Values.mode "score" }}
+apiVersion: v1
+kind: Pod
+metadata:
+  generateName: pvp-{{ .Values.tournament }}-score-
+spec:
+  nodeSelector:
+    node-group: pvp
+  tolerations:
+  - key: node-group
+    value: pvp
+  containers:
+  - name: score
+    image: hkccr.ccs.tencentyun.com/neurips2022nmmo/evaluator:{{ .Values.version }}
+    imagePullPolicy: Always
+    resources:
+      requests:
+        cpu: 1
+        memory: 2Gi
+    command:
+    - bash
+    - -c
+    args:
+    - |2
+      export PYTHONPATH=${PYTHONPATH}:/home/aicrowd
+      python -u pvp/aggregate.py
+    env:
+    {{- range $key, $value := $.Values.aggregate.env }}
+    - name: {{ $key }}
+      value: {{ tpl $value $ | quote }}
+    {{- end }}
+    envFrom:
+    - configMapRef:
+        name: nmmo-cos
+    volumeMounts:
+    - name: shared-disk
+      subPath: pvp/{{ .Values.tournament }}
+      mountPath: /shared
+  volumes:
+  - name: shared-disk
+    nfs:
+      server: 192.168.224.15
+      path: /ru6a4tgh
+  imagePullSecrets:
+  - name: qcloudregistrykey
+  restartPolicy: Never
+{{- end }}

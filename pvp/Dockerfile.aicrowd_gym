@@ -1,0 +1,8 @@
+FROM python:3.9.6
+
+WORKDIR /aicrowd_gym
+
+COPY pvp/aicrowd_gym/aicrowd_gym_internal-0.0.5-py3-none-any.whl aicrowd_gym_internal-0.0.5-py3-none-any.whl
+
+CMD ["python", "-m", "http.server", "12345"]
+
